@@ -16,7 +16,7 @@ var settings = {
     schedules: [
       { day: 1, hour: 23, minute: 45 },
       { day: 1, hour:  0, minute: 40 },
-      { day: 2, hour: 13, minute: 32 },
+      { day: 2, hour: 23, minute:  8 },
       { day: 3, hour:  0, minute: 40 },
       { day: 4, hour:  0, minute: 40 },
     ]
@@ -53,7 +53,7 @@ var grep = function( object, callback ) {
 
   if ( isArray ) {
     for ( i = 0; i < object.length; i++ ) {
-      if ( callback( object[ i ] ) ) {
+      if ( callback( i, object[ i ] ) ) {
         result.push( object[ i ] );
       }
     }
@@ -92,7 +92,7 @@ var core = {
       for ( uuid in settings ) {
         schedule = grep(
           settings[ uuid ].schedules,
-          function( set ) {
+          function( _, set ) {
             return set.day === day && core.config.time( set ).getTime() > now
           }
         )[0];
