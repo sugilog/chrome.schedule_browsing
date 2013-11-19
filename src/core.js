@@ -1,4 +1,4 @@
-// sample
+// dample
 var settings = {
   12345: {
     url: "http://google.com",
@@ -16,14 +16,17 @@ var settings = {
     schedules: [
       { day: 1, hour: 23, minute: 45 },
       { day: 1, hour:  0, minute: 40 },
-      { day: 2, hour: 23, minute:  8 },
+      { day: 2, hour: 23, minute: 55 },
+      { day: 2, hour: 23, minute: 56 },
       { day: 3, hour:  0, minute: 40 },
       { day: 4, hour:  0, minute: 40 },
     ]
   },
 };
 
-var extend = function() {
+var _extend, _grep, _core, _event;
+
+_extend = function() {
   var source, key,
       i = 1,
       l = arguments.length,
@@ -42,7 +45,7 @@ var extend = function() {
   return base;
 };
 
-var grep = function( object, callback ) {
+_grep = function( object, callback ) {
   var i, result,
       isArray = (function( _object ){
         var type = ({}).toString.call( _object );
@@ -69,12 +72,7 @@ var grep = function( object, callback ) {
   return result;
 };
 
-var core = {
-  counter: 0,
-  count: function( count ) {
-    core.counter = core.counter + count;
-    chrome.browserAction.setBadgeText( { text: core.counter.toString() } );
-  },
+_core = {
   config: {
     time: function( config ) {
       var now = new Date();
@@ -83,87 +81,130 @@ var core = {
       now.setSeconds( 0 );
       return now;
     },
-    getAll: function() {
+    getAll: function( date ) {
       var uuid, schedule,
           sets = {},
-          day = new Date().getDay(),
+          day = ( date || new Date() ).getDay(),
           now = Date.now();
 
       for ( uuid in settings ) {
-        schedule = grep(
+        schedule = _grep(
           settings[ uuid ].schedules,
           function( _, set ) {
-            return set.day === day && core.config.time( set ).getTime() > now
+            return set.day === day && _core.config.time( set ).getTime() > now
           }
-        )[0];
+        )[ 0 ];
 
         if ( schedule ) {
-          sets[ uuid ] = core.config.time( schedule );
+          sets[ uuid ] = _core.config.time( schedule );
         }
       }
 
       return sets;
     }
   },
+  util: function() {
+    tomorrow: function() {
+      var date = new Date();
+      date.setDate( date.getDate() + 1 );
+      return date;
+    },
+    setAlarm: function( callback ) {
+      chrome.alarms.onAlarm.addListener( callback );
+    },
+    controller: function( alarm ) {
+      if ( _core.name.isMine( alarm.name ) ) {
+        var uuid = _core.name.parse( alarm.name );
+
+        if ( uuid === 0 ) {
+          // initForTomorrow callback
+        }
+        else {
+          _event.fire( uuid );
+        }
+      }
+    }
+  },
+  init: function() {
+    _event.addAll();
+    _core.util.setAlarm( _event.callback );
+    _core.initForTomorrow();
+  },
+  initForTomorrow: function() {
+    // time > 23:00
+    _event.addAll( core.util.tomorrow() );
+    // tomorrow 2300 alarm set
+
+    // else
+    // today 2300 alarm set
+  },
   name: function( uuid ) {
-    return [ core.name.tag, uuid ].join( core.name.separator );
+    return [ _core.name.tag, uuid ].join( _core.name.separator );
+  },
+  count: function( count ) {
+    _core.count.counter = ( _core.count.counter || 0 ) + count;
+
+    // To hide badge; set empty string.
+    chrome.browserAction.setBadgeText(
+      { text: ( _core.count.counter === 0 ? "" : _core.count.counter.toString() ) }
+    );
   },
 };
 
-extend(
-  core.name,
+_extend(
+  _core.name,
   {
     rname: /^ScheduleBrowsing/,
     tag: "ScheduleBrowsing",
     separator: "#",
     parse: function( name ) {
-      return Number( name.split( core.name.separator )[ 1 ] );
+      return Number( name.split( _core.name.separator )[ 1 ] );
     },
     isMine: function( name ) {
-      return name && core.name.rname.test( name );
+      return name && _core.name.rname.test( name );
     }
   }
 );
 
-var event = {
-  addAll: function() {
+_event = {
+  addAll: function( date ) {
     var uuid,
-        sets = core.config.getAll();
+        sets = _core.config.getAll( date );
 
     for ( uuid in sets ) {
-      event.add( uuid, sets[ uuid ] );
+      _event.add( uuid, sets[ uuid ] );
+    }
+  },
+  addNext: function( uuid ) {
+    var time = _core.config.getAll()[ uuid ];
+
+    if ( time ) {
+      _event.add( uuid, time );
     }
   },
   add: function( uuid, time ) {
-    core.count( 1 );
+    _core.count( 1 );
 
     chrome.alarms.create(
-      core.name( uuid ),
+      _core.name( uuid ),
       {
         when: time.getTime()
       }
     )
   },
-  callback: function( alarm ) {
-    if ( core.name.isMine( alarm.name ) ) {
-      core.count( -1 );
+  fire: function( uuid ) {
+    var setting = settings[ uuid ];
+    _core.count( -1 );
 
-      var set,
-          uuid = core.name.parse( alarm.name );
+    chrome.tabs.create({
+      url:    setting.url,
+      active: true
+    });
 
-      set = settings[ uuid ];
-
-      chrome.tabs.create({
-        url:    set.url,
-        active: true
-      });
-    }
-  },
-  set: function() {
-    chrome.alarms.onAlarm.addListener( event.callback );
+    setTimeout( function() {
+      _event.addNext( uuid );
+    }, 1000 );
   },
 };
 
-event.addAll();
-event.set();
-
+_core.init();
